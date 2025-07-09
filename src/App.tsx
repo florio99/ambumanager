@@ -1,4 +1,5 @@
 import React from 'react';
+import { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from './store/authStore';
@@ -31,7 +32,15 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 };
 
 function App() {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, getCurrentUser } = useAuthStore();
+
+  // Vérifier l'authentification au démarrage
+  useEffect(() => {
+    const token = localStorage.getItem('auth-token');
+    if (token && !isAuthenticated) {
+      getCurrentUser();
+    }
+  }, [isAuthenticated, getCurrentUser]);
 
   return (
     <Router>

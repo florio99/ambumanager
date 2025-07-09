@@ -1,71 +1,41 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { User } from '../types';
+import { authService } from '../services/api';
 
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
+  isLoading: boolean;
   login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
   updateUser: (user: Partial<User>) => void;
+  getCurrentUser: () => Promise<void>;
 }
-
-// Données de démonstration
-const demoUsers: User[] = [
-  {
-    id: '1',
-    username: 'admin',
-    role: 'admin',
-    firstName: 'Admin',
-    lastName: 'Système',
-    email: 'admin@ambulance.com',
-    phone: '+33123456789',
-    isActive: true,
-    lastLogin: new Date(),
-  },
-  {
-    id: '2',
-    username: 'regulateur',
-    role: 'regulateur',
-    firstName: 'Marie',
-    lastName: 'Dupont',
-    email: 'marie.dupont@ambulance.com',
-    phone: '+33123456790',
-    isActive: true,
-    lastLogin: new Date(),
-  },
-  {
-    id: '3',
-    username: 'ambulancier',
-    role: 'ambulancier',
-    firstName: 'Pierre',
-    lastName: 'Martin',
-    email: 'pierre.martin@ambulance.com',
-    phone: '+33123456791',
-    isActive: true,
-    lastLogin: new Date(),
-  },
-];
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
       user: null,
       isAuthenticated: false,
+      isLoading: false,
       
       login: async (username: string, password: string) => {
-        // Simulation d'une authentification
-        if (password === 'demo123') {
-          const user = demoUsers.find(u => u.username === username);
-          if (user) {
-            set({ user, isAuthenticated: true });
-            return true;
-          }
+        set({ isLoading: true });
+        try {
+          await authService.login(username, password);
+          const user = await authService.getCurrentUser();
+          set({ user, isAuthenticated: true, isLoading: false });
+          return true;
+        } catch (error) {
+          console.error('Login error:', error);
+          set({ isLoading: false });
+          return false;
         }
-        return false;
       },
       
       logout: () => {
+        authService.logout();
         set({ user: null, isAuthenticated: false });
       },
       
@@ -75,9 +45,23 @@ export const useAuthStore = create<AuthState>()(
           set({ user: { ...currentUser, ...userData } });
         }
       },
+
+      getCurrentUser: async () => {
+        try {
+          const user = await authService.getCurrentUser();
+          set({ user, isAuthenticated: true });
+        } catch (error) {
+          console.error('Get current user error:', error);
+          set({ user: null, isAuthenticated: false });
+        }
+      },
     }),
     {
       name: 'auth-storage',
+      partialize: (state) => ({ 
+        user: state.user, 
+        isAuthenticated: state.isAuthenticated 
+      }),
     }
   )
 );

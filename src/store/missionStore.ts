@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { Mission, Ambulance, Hospital, Personnel, MaintenanceRecord, Notification } from '../types';
+import { missionService, ambulanceService } from '../services/api';
 
 interface MissionState {
   missions: Mission[];
@@ -9,38 +10,41 @@ interface MissionState {
   maintenanceRecords: MaintenanceRecord[];
   notifications: Notification[];
   selectedMission: Mission | null;
+  isLoading: boolean;
   
   // Actions Missions
-  addMission: (mission: Omit<Mission, 'id' | 'createdAt'>) => void;
-  updateMission: (id: string, updates: Partial<Mission>) => void;
-  deleteMission: (id: string) => void;
-  assignMission: (missionId: string, ambulanceId: string, personnelIds: string[]) => void;
-  updateMissionStatus: (id: string, status: Mission['status']) => void;
+  fetchMissions: () => Promise<void>;
+  addMission: (mission: Omit<Mission, 'id' | 'createdAt'>) => Promise<void>;
+  updateMission: (id: string, updates: Partial<Mission>) => Promise<void>;
+  deleteMission: (id: string) => Promise<void>;
+  assignMission: (missionId: string, ambulanceId: string, personnelIds: string[]) => Promise<void>;
+  updateMissionStatus: (id: string, status: Mission['status']) => Promise<void>;
   setSelectedMission: (mission: Mission | null) => void;
   
   // Actions Ambulances
-  addAmbulance: (ambulance: Omit<Ambulance, 'id'>) => void;
-  updateAmbulance: (id: string, updates: Partial<Ambulance>) => void;
-  deleteAmbulance: (id: string) => void;
-  updateAmbulanceStatus: (id: string, status: Ambulance['status']) => void;
-  updateAmbulanceLocation: (id: string, location: { lat: number; lng: number }) => void;
+  fetchAmbulances: () => Promise<void>;
+  addAmbulance: (ambulance: Omit<Ambulance, 'id'>) => Promise<void>;
+  updateAmbulance: (id: string, updates: Partial<Ambulance>) => Promise<void>;
+  deleteAmbulance: (id: string) => Promise<void>;
+  updateAmbulanceStatus: (id: string, status: Ambulance['status']) => Promise<void>;
+  updateAmbulanceLocation: (id: string, location: { lat: number; lng: number }) => Promise<void>;
   
-  // Actions Hôpitaux
+  // Actions Hôpitaux (données locales pour l'instant)
   addHospital: (hospital: Omit<Hospital, 'id'>) => void;
   updateHospital: (id: string, updates: Partial<Hospital>) => void;
   deleteHospital: (id: string) => void;
   
-  // Actions Personnel
+  // Actions Personnel (données locales pour l'instant)
   addPersonnel: (personnel: Omit<Personnel, 'id'>) => void;
   updatePersonnel: (id: string, updates: Partial<Personnel>) => void;
   deletePersonnel: (id: string) => void;
   
-  // Actions Maintenance
+  // Actions Maintenance (données locales pour l'instant)
   addMaintenanceRecord: (record: Omit<MaintenanceRecord, 'id'>) => void;
   updateMaintenanceRecord: (id: string, updates: Partial<MaintenanceRecord>) => void;
   deleteMaintenanceRecord: (id: string) => void;
   
-  // Actions Notifications
+  // Actions Notifications (données locales pour l'instant)
   addNotification: (notification: Omit<Notification, 'id' | 'createdAt'>) => void;
   markNotificationAsRead: (id: string) => void;
   deleteNotification: (id: string) => void;
@@ -51,7 +55,7 @@ interface MissionState {
   getActiveMissions: () => Mission[];
 }
 
-// Données de démonstration étendues
+// Données de démonstration pour les entités non encore implémentées dans le backend
 const demoHospitals: Hospital[] = [
   {
     id: '1',
@@ -74,68 +78,6 @@ const demoHospitals: Hospital[] = [
     availableBeds: { emergency: 12, icu: 6, general: 38 },
     specialties: ['Hématologie', 'Oncologie', 'Dermatologie'],
     isActive: true,
-  },
-  {
-    id: '3',
-    name: 'Hôpital Cochin',
-    address: '27 Rue du Faubourg Saint-Jacques, 75014 Paris',
-    phone: '+33158411234',
-    email: 'contact@cochin.fr',
-    location: { lat: 48.8387, lng: 2.3372 },
-    availableBeds: { emergency: 18, icu: 10, general: 52 },
-    specialties: ['Chirurgie', 'Maternité', 'Pédiatrie'],
-    isActive: true,
-  },
-];
-
-const demoAmbulances: Ambulance[] = [
-  {
-    id: '1',
-    plateNumber: 'AMB-001',
-    model: 'Mercedes Sprinter',
-    capacity: 2,
-    status: 'disponible',
-    location: { lat: 48.8566, lng: 2.3522, lastUpdate: new Date() },
-    assignedPersonnel: ['1', '2'],
-    equipment: ['Défibrillateur', 'Respirateur', 'Brancard', 'Oxygène'],
-    fuelLevel: 85,
-    mileage: 45230,
-  },
-  {
-    id: '2',
-    plateNumber: 'AMB-002',
-    model: 'Volkswagen Crafter',
-    capacity: 2,
-    status: 'en_mission',
-    location: { lat: 48.8606, lng: 2.3376, lastUpdate: new Date() },
-    assignedPersonnel: ['3', '4'],
-    equipment: ['Défibrillateur', 'Respirateur', 'Brancard', 'Oxygène'],
-    fuelLevel: 62,
-    mileage: 38750,
-  },
-  {
-    id: '3',
-    plateNumber: 'AMB-003',
-    model: 'Ford Transit',
-    capacity: 1,
-    status: 'maintenance',
-    location: { lat: 48.8534, lng: 2.3488, lastUpdate: new Date() },
-    assignedPersonnel: [],
-    equipment: ['Défibrillateur', 'Brancard', 'Oxygène'],
-    fuelLevel: 95,
-    mileage: 52100,
-  },
-  {
-    id: '4',
-    plateNumber: 'AMB-004',
-    model: 'Renault Master',
-    capacity: 2,
-    status: 'disponible',
-    location: { lat: 48.8584, lng: 2.2945, lastUpdate: new Date() },
-    assignedPersonnel: ['5', '6'],
-    equipment: ['Défibrillateur', 'Respirateur', 'Brancard', 'Oxygène', 'Moniteur cardiaque'],
-    fuelLevel: 78,
-    mileage: 29800,
   },
 ];
 
@@ -174,357 +116,122 @@ const demoPersonnel: Personnel[] = [
     },
     assignedAmbulance: '1',
   },
-  {
-    id: '3',
-    userId: '5',
-    firstName: 'Marc',
-    lastName: 'Leroy',
-    role: 'ambulancier',
-    qualification: ['Ambulancier DE', 'Secourisme', 'Conduite d\'urgence'],
-    phone: '+33123456793',
-    email: 'marc.leroy@ambulance.com',
-    status: 'en_service',
-    currentShift: {
-      start: new Date(2024, 0, 15, 8, 0),
-      end: new Date(2024, 0, 15, 20, 0),
-      type: 'jour',
-    },
-    assignedAmbulance: '2',
-  },
-  {
-    id: '4',
-    userId: '6',
-    firstName: 'Julie',
-    lastName: 'Bernard',
-    role: 'paramedic',
-    qualification: ['Paramédic', 'Réanimation', 'Soins intensifs'],
-    phone: '+33123456794',
-    email: 'julie.bernard@ambulance.com',
-    status: 'en_service',
-    currentShift: {
-      start: new Date(2024, 0, 15, 8, 0),
-      end: new Date(2024, 0, 15, 20, 0),
-      type: 'jour',
-    },
-    assignedAmbulance: '2',
-  },
-  {
-    id: '5',
-    userId: '7',
-    firstName: 'Thomas',
-    lastName: 'Moreau',
-    role: 'ambulancier',
-    qualification: ['Ambulancier DE', 'Secourisme'],
-    phone: '+33123456795',
-    email: 'thomas.moreau@ambulance.com',
-    status: 'disponible',
-    assignedAmbulance: '4',
-  },
-  {
-    id: '6',
-    userId: '8',
-    firstName: 'Emma',
-    lastName: 'Rousseau',
-    role: 'medecin',
-    qualification: ['Médecin urgentiste', 'Réanimation', 'Cardiologie'],
-    phone: '+33123456796',
-    email: 'emma.rousseau@ambulance.com',
-    status: 'repos',
-  },
-];
-
-const demoMaintenanceRecords: MaintenanceRecord[] = [
-  {
-    id: '1',
-    ambulanceId: '1',
-    type: 'preventive',
-    description: 'Révision générale et changement d\'huile',
-    cost: 450,
-    scheduledDate: new Date(2024, 0, 20),
-    status: 'planifiee',
-    technician: 'Jean Dupont',
-    parts: ['Huile moteur', 'Filtre à huile', 'Filtre à air'],
-    notes: 'Révision des 50 000 km',
-  },
-  {
-    id: '2',
-    ambulanceId: '2',
-    type: 'corrective',
-    description: 'Réparation du système de freinage',
-    cost: 680,
-    scheduledDate: new Date(2024, 0, 18),
-    completedDate: new Date(2024, 0, 18),
-    status: 'terminee',
-    technician: 'Marie Leroy',
-    parts: ['Plaquettes de frein', 'Disques de frein'],
-    notes: 'Usure prématurée détectée lors du contrôle',
-  },
-  {
-    id: '3',
-    ambulanceId: '3',
-    type: 'urgente',
-    description: 'Panne du défibrillateur',
-    cost: 1200,
-    scheduledDate: new Date(2024, 0, 16),
-    status: 'en_cours',
-    technician: 'Paul Martin',
-    parts: ['Module électronique', 'Électrodes'],
-    notes: 'Remplacement du module défaillant',
-  },
-];
-
-const demoNotifications: Notification[] = [
-  {
-    id: '1',
-    type: 'mission',
-    title: 'Nouvelle mission critique',
-    message: 'Mission critique assignée - Patient en détresse respiratoire',
-    priority: 'critical',
-    role: 'ambulancier',
-    isRead: false,
-    createdAt: new Date(2024, 0, 15, 14, 30),
-    actionUrl: '/missions',
-  },
-  {
-    id: '2',
-    type: 'maintenance',
-    title: 'Maintenance programmée',
-    message: 'Révision de l\'ambulance AMB-001 prévue demain',
-    priority: 'medium',
-    role: 'admin',
-    isRead: false,
-    createdAt: new Date(2024, 0, 15, 10, 15),
-  },
-  {
-    id: '3',
-    type: 'system',
-    title: 'Mise à jour système',
-    message: 'Le système a été mis à jour avec succès',
-    priority: 'low',
-    isRead: true,
-    createdAt: new Date(2024, 0, 15, 8, 0),
-  },
-  {
-    id: '4',
-    type: 'emergency',
-    title: 'Ambulance en panne',
-    message: 'AMB-003 signale une panne technique',
-    priority: 'high',
-    role: 'regulateur',
-    isRead: false,
-    createdAt: new Date(2024, 0, 15, 13, 45),
-  },
-];
-
-const demoMissions: Mission[] = [
-  {
-    id: '1',
-    patientName: 'Jean Dupont',
-    patientPhone: '+33123456789',
-    patientAge: 65,
-    patientCondition: 'Douleur thoracique',
-    priority: 'critique',
-    status: 'en_cours',
-    pickupLocation: {
-      address: '15 Rue de Rivoli, 75001 Paris',
-      lat: 48.8566,
-      lng: 2.3522,
-    },
-    destination: {
-      hospitalId: '1',
-      hospitalName: 'CHU de Paris',
-      address: '47-83 Boulevard de l\'Hôpital, 75013 Paris',
-      lat: 48.8388,
-      lng: 2.3619,
-    },
-    ambulanceId: '2',
-    assignedPersonnel: ['3', '4'],
-    createdAt: new Date(2024, 0, 15, 14, 30),
-    assignedAt: new Date(2024, 0, 15, 14, 32),
-    startedAt: new Date(2024, 0, 15, 14, 35),
-    estimatedDuration: 25,
-    notes: 'Patient conscient, douleur intense',
-    symptoms: ['Douleur thoracique', 'Essoufflement', 'Sueurs'],
-  },
-  {
-    id: '2',
-    patientName: 'Marie Leroy',
-    patientPhone: '+33123456790',
-    patientAge: 34,
-    patientCondition: 'Fracture du bras',
-    priority: 'normale',
-    status: 'en_attente',
-    pickupLocation: {
-      address: '28 Avenue des Champs-Élysées, 75008 Paris',
-      lat: 48.8698,
-      lng: 2.3076,
-    },
-    destination: {
-      hospitalId: '2',
-      hospitalName: 'Hôpital Saint-Louis',
-      address: '1 Avenue Claude Vellefaux, 75010 Paris',
-      lat: 48.8719,
-      lng: 2.3698,
-    },
-    assignedPersonnel: [],
-    createdAt: new Date(2024, 0, 15, 15, 15),
-    estimatedDuration: 20,
-    notes: 'Chute à vélo, patient stable',
-    symptoms: ['Douleur au bras', 'Déformation visible'],
-  },
-  {
-    id: '3',
-    patientName: 'Paul Bernard',
-    patientPhone: '+33123456791',
-    patientAge: 78,
-    patientCondition: 'Malaise général',
-    priority: 'urgente',
-    status: 'terminee',
-    pickupLocation: {
-      address: '12 Place de la Bastille, 75011 Paris',
-      lat: 48.8532,
-      lng: 2.3692,
-    },
-    destination: {
-      hospitalId: '1',
-      hospitalName: 'CHU de Paris',
-      address: '47-83 Boulevard de l\'Hôpital, 75013 Paris',
-      lat: 48.8388,
-      lng: 2.3619,
-    },
-    ambulanceId: '1',
-    assignedPersonnel: ['1', '2'],
-    createdAt: new Date(2024, 0, 15, 13, 0),
-    assignedAt: new Date(2024, 0, 15, 13, 2),
-    startedAt: new Date(2024, 0, 15, 13, 8),
-    completedAt: new Date(2024, 0, 15, 13, 45),
-    estimatedDuration: 30,
-    actualDuration: 37,
-    notes: 'Transport effectué sans complications',
-    symptoms: ['Faiblesse', 'Vertiges', 'Nausées'],
-  },
 ];
 
 export const useMissionStore = create<MissionState>((set, get) => ({
-  missions: demoMissions,
-  ambulances: demoAmbulances,
+  missions: [],
+  ambulances: [],
   hospitals: demoHospitals,
   personnel: demoPersonnel,
-  maintenanceRecords: demoMaintenanceRecords,
-  notifications: demoNotifications,
+  maintenanceRecords: [],
+  notifications: [],
   selectedMission: null,
+  isLoading: false,
 
   // Actions Missions
-  addMission: (missionData) => {
-    const newMission: Mission = {
-      ...missionData,
-      id: Date.now().toString(),
-      createdAt: new Date(),
-    };
-    set((state) => ({
-      missions: [...state.missions, newMission],
-    }));
-    
-    // Ajouter une notification pour les missions critiques
-    if (missionData.priority === 'critique') {
-      const { addNotification } = get();
-      addNotification({
-        type: 'mission',
-        title: 'Nouvelle mission critique',
-        message: `Mission critique créée pour ${missionData.patientName} - ${missionData.patientCondition}`,
-        priority: 'critical',
-        role: 'ambulancier',
-        actionUrl: '/missions',
-        isRead: false
-      });
+  fetchMissions: async () => {
+    set({ isLoading: true });
+    try {
+      const missions = await missionService.getMissions();
+      set({ missions, isLoading: false });
+    } catch (error) {
+      console.error('Error fetching missions:', error);
+      set({ isLoading: false });
     }
   },
 
-  updateMission: (id, updates) => {
-    set((state) => ({
-      missions: state.missions.map((mission) =>
-        mission.id === id ? { ...mission, ...updates } : mission
-      ),
-    }));
-  },
-
-  deleteMission: (id) => {
-    set((state) => ({
-      missions: state.missions.filter((mission) => mission.id !== id),
-    }));
-  },
-
-  assignMission: (missionId, ambulanceId, personnelIds) => {
-    const now = new Date();
-    set((state) => ({
-      missions: state.missions.map((mission) =>
-        mission.id === missionId
-          ? {
-              ...mission,
-              ambulanceId,
-              assignedPersonnel: personnelIds,
-              status: 'assignee' as const,
-              assignedAt: now,
-            }
-          : mission
-      ),
-      ambulances: state.ambulances.map((ambulance) =>
-        ambulance.id === ambulanceId
-          ? { ...ambulance, status: 'en_mission' as const }
-          : ambulance
-      ),
-      personnel: state.personnel.map((person) =>
-        personnelIds.includes(person.id)
-          ? { ...person, status: 'en_service' as const, assignedAmbulance: ambulanceId }
-          : person
-      ),
-    }));
-    
-    // Ajouter une notification pour l'assignation
-    const { addNotification } = get();
-    const mission = get().missions.find(m => m.id === missionId);
-    if (mission) {
-      addNotification({
-        type: 'mission',
-        title: 'Mission assignée',
-        message: `Mission pour ${mission.patientName} assignée avec succès`,
-        priority: 'medium',
-        role: 'ambulancier',
-        actionUrl: '/missions',
-        isRead: false
-      });
-    }
-  },
-
-  updateMissionStatus: (id, status) => {
-    const now = new Date();
-    set((state) => ({
-      missions: state.missions.map((mission) => {
-        if (mission.id === id) {
-          const updates: Partial<Mission> = { status };
-          
-          if (status === 'en_cours' && !mission.startedAt) {
-            updates.startedAt = now;
-          } else if (status === 'terminee' && !mission.completedAt) {
-            updates.completedAt = now;
-            if (mission.startedAt) {
-              updates.actualDuration = Math.round(
-                (now.getTime() - mission.startedAt.getTime()) / (1000 * 60)
-              );
-            }
-          }
-          
-          return { ...mission, ...updates };
-        }
-        return mission;
-      }),
-    }));
-
-    if (status === 'terminee') {
-      const mission = get().missions.find(m => m.id === id);
-      if (mission?.ambulanceId) {
-        get().updateAmbulanceStatus(mission.ambulanceId, 'disponible');
+  addMission: async (missionData) => {
+    try {
+      const newMission = await missionService.createMission(missionData);
+      set((state) => ({
+        missions: [...state.missions, newMission],
+      }));
+      
+      // Ajouter une notification pour les missions critiques
+      if (missionData.priority === 'critique') {
+        const { addNotification } = get();
+        addNotification({
+          type: 'mission',
+          title: 'Nouvelle mission critique',
+          message: `Mission critique créée pour ${missionData.patientName} - ${missionData.patientCondition}`,
+          priority: 'critical',
+          role: 'ambulancier',
+          actionUrl: '/missions',
+          isRead: false
+        });
       }
+    } catch (error) {
+      console.error('Error creating mission:', error);
+      throw error;
+    }
+  },
+
+  updateMission: async (id, updates) => {
+    try {
+      const updatedMission = await missionService.updateMission(id, updates);
+      set((state) => ({
+        missions: state.missions.map((mission) =>
+          mission.id === id ? updatedMission : mission
+        ),
+      }));
+    } catch (error) {
+      console.error('Error updating mission:', error);
+      throw error;
+    }
+  },
+
+  deleteMission: async (id) => {
+    try {
+      await missionService.deleteMission(id);
+      set((state) => ({
+        missions: state.missions.filter((mission) => mission.id !== id),
+      }));
+    } catch (error) {
+      console.error('Error deleting mission:', error);
+      throw error;
+    }
+  },
+
+  assignMission: async (missionId, ambulanceId, personnelIds) => {
+    try {
+      const updatedMission = await missionService.assignMission(missionId, {
+        ambulance_id: ambulanceId,
+        personnel_ids: personnelIds,
+      });
+      
+      set((state) => ({
+        missions: state.missions.map((mission) =>
+          mission.id === missionId ? updatedMission : mission
+        ),
+      }));
+      
+      // Mettre à jour le statut de l'ambulance
+      await get().updateAmbulanceStatus(ambulanceId, 'en_mission');
+    } catch (error) {
+      console.error('Error assigning mission:', error);
+      throw error;
+    }
+  },
+
+  updateMissionStatus: async (id, status) => {
+    try {
+      const updatedMission = await missionService.updateMissionStatus(id, status);
+      set((state) => ({
+        missions: state.missions.map((mission) =>
+          mission.id === id ? updatedMission : mission
+        ),
+      }));
+
+      // Si la mission est terminée, libérer l'ambulance
+      if (status === 'terminee') {
+        const mission = get().missions.find(m => m.id === id);
+        if (mission?.ambulanceId) {
+          await get().updateAmbulanceStatus(mission.ambulanceId, 'disponible');
+        }
+      }
+    } catch (error) {
+      console.error('Error updating mission status:', error);
+      throw error;
     }
   },
 
@@ -533,52 +240,87 @@ export const useMissionStore = create<MissionState>((set, get) => ({
   },
 
   // Actions Ambulances
-  addAmbulance: (ambulanceData) => {
-    const newAmbulance: Ambulance = {
-      ...ambulanceData,
-      id: Date.now().toString(),
-    };
-    set((state) => ({
-      ambulances: [...state.ambulances, newAmbulance],
-    }));
+  fetchAmbulances: async () => {
+    set({ isLoading: true });
+    try {
+      const ambulances = await ambulanceService.getAmbulances();
+      set({ ambulances, isLoading: false });
+    } catch (error) {
+      console.error('Error fetching ambulances:', error);
+      set({ isLoading: false });
+    }
   },
 
-  updateAmbulance: (id, updates) => {
-    set((state) => ({
-      ambulances: state.ambulances.map((ambulance) =>
-        ambulance.id === id ? { ...ambulance, ...updates } : ambulance
-      ),
-    }));
+  addAmbulance: async (ambulanceData) => {
+    try {
+      const newAmbulance = await ambulanceService.createAmbulance(ambulanceData);
+      set((state) => ({
+        ambulances: [...state.ambulances, newAmbulance],
+      }));
+    } catch (error) {
+      console.error('Error creating ambulance:', error);
+      throw error;
+    }
   },
 
-  deleteAmbulance: (id) => {
-    set((state) => ({
-      ambulances: state.ambulances.filter((ambulance) => ambulance.id !== id),
-    }));
+  updateAmbulance: async (id, updates) => {
+    try {
+      const updatedAmbulance = await ambulanceService.updateAmbulance(id, updates);
+      set((state) => ({
+        ambulances: state.ambulances.map((ambulance) =>
+          ambulance.id === id ? updatedAmbulance : ambulance
+        ),
+      }));
+    } catch (error) {
+      console.error('Error updating ambulance:', error);
+      throw error;
+    }
   },
 
-  updateAmbulanceStatus: (id, status) => {
-    set((state) => ({
-      ambulances: state.ambulances.map((ambulance) =>
-        ambulance.id === id ? { ...ambulance, status } : ambulance
-      ),
-    }));
+  deleteAmbulance: async (id) => {
+    try {
+      await ambulanceService.deleteAmbulance(id);
+      set((state) => ({
+        ambulances: state.ambulances.filter((ambulance) => ambulance.id !== id),
+      }));
+    } catch (error) {
+      console.error('Error deleting ambulance:', error);
+      throw error;
+    }
   },
 
-  updateAmbulanceLocation: (id, location) => {
-    set((state) => ({
-      ambulances: state.ambulances.map((ambulance) =>
-        ambulance.id === id
-          ? {
-              ...ambulance,
-              location: { ...location, lastUpdate: new Date() },
-            }
-          : ambulance
-      ),
-    }));
+  updateAmbulanceStatus: async (id, status) => {
+    try {
+      const updatedAmbulance = await ambulanceService.updateAmbulanceStatus(id, status);
+      set((state) => ({
+        ambulances: state.ambulances.map((ambulance) =>
+          ambulance.id === id ? updatedAmbulance : ambulance
+        ),
+      }));
+    } catch (error) {
+      console.error('Error updating ambulance status:', error);
+      throw error;
+    }
   },
 
-  // Actions Hôpitaux
+  updateAmbulanceLocation: async (id, location) => {
+    try {
+      const updatedAmbulance = await ambulanceService.updateAmbulanceLocation(id, {
+        latitude: location.lat,
+        longitude: location.lng,
+      });
+      set((state) => ({
+        ambulances: state.ambulances.map((ambulance) =>
+          ambulance.id === id ? updatedAmbulance : ambulance
+        ),
+      }));
+    } catch (error) {
+      console.error('Error updating ambulance location:', error);
+      throw error;
+    }
+  },
+
+  // Actions Hôpitaux (données locales)
   addHospital: (hospitalData) => {
     const newHospital: Hospital = {
       ...hospitalData,
@@ -603,7 +345,7 @@ export const useMissionStore = create<MissionState>((set, get) => ({
     }));
   },
 
-  // Actions Personnel
+  // Actions Personnel (données locales)
   addPersonnel: (personnelData) => {
     const newPersonnel: Personnel = {
       ...personnelData,
@@ -628,7 +370,7 @@ export const useMissionStore = create<MissionState>((set, get) => ({
     }));
   },
 
-  // Actions Maintenance
+  // Actions Maintenance (données locales)
   addMaintenanceRecord: (recordData) => {
     const newRecord: MaintenanceRecord = {
       ...recordData,
@@ -653,7 +395,7 @@ export const useMissionStore = create<MissionState>((set, get) => ({
     }));
   },
 
-  // Actions Notifications
+  // Actions Notifications (données locales)
   addNotification: (notificationData) => {
     const newNotification: Notification = {
       ...notificationData,

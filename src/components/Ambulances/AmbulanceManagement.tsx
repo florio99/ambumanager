@@ -10,7 +10,7 @@ import AmbulanceMap from './AmbulanceMap';
 import AmbulanceAssignment from './AmbulanceAssignment';
 
 const AmbulanceManagement: React.FC = () => {
-  const { ambulances, updateAmbulanceStatus, deleteAmbulance, addAmbulance, updateAmbulance } = useMissionStore();
+  const { ambulances, updateAmbulanceStatus, deleteAmbulance, addAmbulance, updateAmbulance, fetchAmbulances } = useMissionStore();
   const { user } = useAuthStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -18,6 +18,11 @@ const AmbulanceManagement: React.FC = () => {
   const [editingAmbulance, setEditingAmbulance] = useState<Ambulance | null>(null);
   const [showMap, setShowMap] = useState(false);
   const [showAssignment, setShowAssignment] = useState(false);
+
+  // Charger les ambulances au montage du composant
+  useEffect(() => {
+    fetchAmbulances();
+  }, [fetchAmbulances]);
 
   const filteredAmbulances = ambulances.filter((ambulance) => {
     const matchesSearch = 

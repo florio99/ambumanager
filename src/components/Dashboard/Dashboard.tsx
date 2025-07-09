@@ -1,12 +1,19 @@
 import React from 'react';
+import { useEffect } from 'react';
 import { Truck, Users, Clock, CheckCircle, AlertTriangle, Activity, MapPin, Guitar as Hospital } from 'lucide-react';
 import StatsCard from './StatsCard';
 import { useMissionStore } from '../../store/missionStore';
 import { useAuthStore } from '../../store/authStore';
 
 const Dashboard: React.FC = () => {
-  const { missions, ambulances, personnel } = useMissionStore();
+  const { missions, ambulances, personnel, fetchMissions, fetchAmbulances } = useMissionStore();
   const { user } = useAuthStore();
+
+  // Charger les données au montage du composant
+  useEffect(() => {
+    fetchMissions();
+    fetchAmbulances();
+  }, [fetchMissions, fetchAmbulances]);
 
   // Calculs des statistiques
   const activeMissions = missions.filter(m => 

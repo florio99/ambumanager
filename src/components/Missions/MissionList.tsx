@@ -9,7 +9,7 @@ import MissionDetails from './MissionDetails';
 import AmbulanceAssignment from '../Ambulances/AmbulanceAssignment';
 
 const MissionList: React.FC = () => {
-  const { missions, updateMissionStatus, deleteMission, assignMission, getAvailableAmbulances } = useMissionStore();
+  const { missions, updateMissionStatus, deleteMission, assignMission, getAvailableAmbulances, fetchMissions, addMission } = useMissionStore();
   const { user } = useAuthStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -23,6 +23,11 @@ const MissionList: React.FC = () => {
   const [assignmentMission, setAssignmentMission] = useState<Mission | null>(null);
 
   const availableAmbulances = getAvailableAmbulances();
+
+  // Charger les missions au montage du composant
+  useEffect(() => {
+    fetchMissions();
+  }, [fetchMissions]);
 
   const filteredMissions = missions.filter((mission) => {
     const matchesSearch = 
@@ -102,11 +107,9 @@ const MissionList: React.FC = () => {
 
   const handleFormSubmit = (missionData: Partial<Mission>) => {
     if (editingMission) {
-      // Logique de mise à jour (à implémenter dans le store)
+      updateMission(editingMission.id, missionData);
       toast.success('Mission mise à jour');
     } else {
-      // Créer nouvelle mission
-      const { addMission } = useMissionStore.getState();
       addMission(missionData as Omit<Mission, 'id' | 'createdAt'>);
       toast.success('Mission créée avec succès');
     }
