@@ -1,33 +1,73 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const { missions, ambulances } = require('../data/mockData');
+const { Mission, Ambulance, Hospital } = require('../models');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
 // Obtenir toutes les missions
-router.get('/', authenticateToken, (req, res) => {
-  const { skip = 0, limit = 100 } = req.query;
-  const startIndex = parseInt(skip);
-  const endIndex = startIndex + parseInt(limit);
-  
-  const missionList = missions.slice(startIndex, endIndex);
-  res.json(missionList);
+router.get('/', authenticateToken, async (req, res) => {
+  try {
+    const { skip = 0, limit = 100 } = req.query;
+    const offset = parseInt(skip);
+    const limitNum = parseInt(limit);
+    
+    const missions = await Mission.findAll({
+      offset,
+      limit: limitNum,
+      include: [
+        { model: Hospital, as: 'hospital' },
+        { model: Ambulance, as: 'ambulance' }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+
+    res.json(missions);
+  } catch (error) {
+    console.error('Erreur récupération missions:', error);
+    res.status(500).json({ message: 'Erreur interne du serveur' });
+  }
 });
 
 // Obtenir les missions actives
-router.get('/active', authenticateToken, (req, res) => {
-  const activeMissions = missions.filter(m => 
-    ['en_attente', 'assignee', 'en_cours'].includes(m.status)
-  );
-  res.json(activeMissions);
+router.get('/active', authenticateToken, async (req, res) => {
+  try {
+    const activeMissions = await Mission.findAll({
+      where: {
+        status: ['en_attente', 'assignee', 'en_cours']
+      },
+      include: [
+        { model: Hospital, as: 'hospital' },
+        { model: Ambulance, as: 'ambulance' }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+
+    res.json(activeMissions);
+  } catch (error) {
+    console.error('Erreur récupération missions actives:', error);
+    res.status(500).json({ message: 'Erreur interne du serveur' });
+  }
 });
 
 // Obtenir les missions par statut
-router.get('/status/:status', authenticateToken, (req, res) => {
-  const { status } = req.params;
-  const missionsByStatus = missions.filter(m => m.status === status);
-  res.json(missionsByStatus);
+router.get('/status/:status', authenticateToken, async (req, res) => {
+  try {
+    const { status } = req.params;
+    const missionsByStatus = await Mission.findAll({
+      where: { status },
+      include: [
+        { model: Hospital, as: 'hospital' },
+        { model: Ambulance, as: 'ambulance' }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+
+    res.json(missionsByStatus);
+  } catch (error) {
+    console.error('Erreur récupération missions par statut:', error);
+    res.status(500).json({ message: 'Erreur interne du serveur' });
+  }
 });
 
 // Créer une nouvelle mission
@@ -42,7 +82,7 @@ router.post('/', [
   body('pickup_latitude').isFloat().withMessage('Latitude de prise en charge invalide'),
   body('pickup_longitude').isFloat().withMessage('Longitude de prise en charge invalide'),
   body('hospital_id').notEmpty().withMessage('L\'hôpital de destination est requis')
-], (req, res) => {
+], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -64,33 +104,38 @@ router.post('/', [
       notes = ''
     } = req.body;
 
+    // Vérifier que l'hôpital existe
+    const hospital = await Hospital.findByPk(hospital_id);
+    if (!hospital) {
+      return res.status(404).json({ message: 'Hôpital non trouvé' });
+    }
+
     // Créer la nouvelle mission
-    const newMission = {
-      id: (missions.length + 1).toString(),
-      patient_name,
-      patient_phone,
-      patient_age: patient_age || null,
-      patient_condition,
+    const newMission = await Mission.create({
+      patientName: patient_name,
+      patientPhone: patient_phone,
+      patientAge: patient_age,
+      patientCondition: patient_condition,
       priority,
       status: 'en_attente',
-      pickup_address,
-      pickup_latitude,
-      pickup_longitude,
-      hospital_id,
-      ambulance_id: null,
-      assigned_personnel: [],
-      estimated_duration,
-      actual_duration: null,
+      pickupAddress: pickup_address,
+      pickupLatitude: pickup_latitude,
+      pickupLongitude: pickup_longitude,
+      hospitalId: hospital_id,
+      estimatedDuration: estimated_duration,
       symptoms,
-      notes,
-      created_at: new Date(),
-      assigned_at: null,
-      started_at: null,
-      completed_at: null
-    };
+      notes
+    });
 
-    missions.push(newMission);
-    res.status(201).json(newMission);
+    // Récupérer la mission avec les relations
+    const missionWithRelations = await Mission.findByPk(newMission.id, {
+      include: [
+        { model: Hospital, as: 'hospital' },
+        { model: Ambulance, as: 'ambulance' }
+      ]
+    });
+
+    res.status(201).json(missionWithRelations);
   } catch (error) {
     console.error('Erreur création mission:', error);
     res.status(500).json({ message: 'Erreur interne du serveur' });
@@ -98,29 +143,48 @@ router.post('/', [
 });
 
 // Obtenir une mission par ID
-router.get('/:id', authenticateToken, (req, res) => {
-  const mission = missions.find(m => m.id === req.params.id);
-  if (!mission) {
-    return res.status(404).json({ message: 'Mission non trouvée' });
+router.get('/:id', authenticateToken, async (req, res) => {
+  try {
+    const mission = await Mission.findByPk(req.params.id, {
+      include: [
+        { model: Hospital, as: 'hospital' },
+        { model: Ambulance, as: 'ambulance' }
+      ]
+    });
+
+    if (!mission) {
+      return res.status(404).json({ message: 'Mission non trouvée' });
+    }
+
+    res.json(mission);
+  } catch (error) {
+    console.error('Erreur récupération mission:', error);
+    res.status(500).json({ message: 'Erreur interne du serveur' });
   }
-  res.json(mission);
 });
 
 // Mettre à jour une mission
 router.put('/:id', [
   authenticateToken,
   requireRole(['admin', 'regulateur'])
-], (req, res) => {
+], async (req, res) => {
   try {
-    const missionIndex = missions.findIndex(m => m.id === req.params.id);
-    if (missionIndex === -1) {
+    const mission = await Mission.findByPk(req.params.id);
+    if (!mission) {
       return res.status(404).json({ message: 'Mission non trouvée' });
     }
 
-    const updateData = { ...req.body };
-    missions[missionIndex] = { ...missions[missionIndex], ...updateData };
-    
-    res.json(missions[missionIndex]);
+    await mission.update(req.body);
+
+    // Récupérer la mission mise à jour avec les relations
+    const updatedMission = await Mission.findByPk(mission.id, {
+      include: [
+        { model: Hospital, as: 'hospital' },
+        { model: Ambulance, as: 'ambulance' }
+      ]
+    });
+
+    res.json(updatedMission);
   } catch (error) {
     console.error('Erreur mise à jour mission:', error);
     res.status(500).json({ message: 'Erreur interne du serveur' });
@@ -133,22 +197,22 @@ router.post('/:id/assign', [
   requireRole(['admin', 'regulateur']),
   body('ambulance_id').notEmpty().withMessage('L\'ID de l\'ambulance est requis'),
   body('personnel_ids').isArray().withMessage('La liste du personnel doit être un tableau')
-], (req, res) => {
+], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const missionIndex = missions.findIndex(m => m.id === req.params.id);
-    if (missionIndex === -1) {
+    const mission = await Mission.findByPk(req.params.id);
+    if (!mission) {
       return res.status(404).json({ message: 'Mission non trouvée' });
     }
 
     const { ambulance_id, personnel_ids } = req.body;
 
     // Vérifier que l'ambulance existe et est disponible
-    const ambulance = ambulances.find(a => a.id === ambulance_id);
+    const ambulance = await Ambulance.findByPk(ambulance_id);
     if (!ambulance) {
       return res.status(404).json({ message: 'Ambulance non trouvée' });
     }
@@ -158,19 +222,25 @@ router.post('/:id/assign', [
     }
 
     // Assigner la mission
-    missions[missionIndex].ambulance_id = ambulance_id;
-    missions[missionIndex].assigned_personnel = personnel_ids;
-    missions[missionIndex].status = 'assignee';
-    missions[missionIndex].assigned_at = new Date();
+    await mission.update({
+      ambulanceId: ambulance_id,
+      assignedPersonnel: personnel_ids,
+      status: 'assignee',
+      assignedAt: new Date()
+    });
 
     // Mettre à jour le statut de l'ambulance
-    const ambulanceIndex = ambulances.findIndex(a => a.id === ambulance_id);
-    if (ambulanceIndex !== -1) {
-      ambulances[ambulanceIndex].status = 'en_mission';
-      ambulances[ambulanceIndex].updated_at = new Date();
-    }
+    await ambulance.update({ status: 'en_mission' });
 
-    res.json(missions[missionIndex]);
+    // Récupérer la mission mise à jour avec les relations
+    const updatedMission = await Mission.findByPk(mission.id, {
+      include: [
+        { model: Hospital, as: 'hospital' },
+        { model: Ambulance, as: 'ambulance' }
+      ]
+    });
+
+    res.json(updatedMission);
   } catch (error) {
     console.error('Erreur assignation mission:', error);
     res.status(500).json({ message: 'Erreur interne du serveur' });
@@ -181,46 +251,53 @@ router.post('/:id/assign', [
 router.put('/:id/status', [
   authenticateToken,
   body('status').isIn(['en_attente', 'assignee', 'en_cours', 'terminee', 'annulee']).withMessage('Statut invalide')
-], (req, res) => {
+], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const missionIndex = missions.findIndex(m => m.id === req.params.id);
-    if (missionIndex === -1) {
+    const mission = await Mission.findByPk(req.params.id, {
+      include: [{ model: Ambulance, as: 'ambulance' }]
+    });
+
+    if (!mission) {
       return res.status(404).json({ message: 'Mission non trouvée' });
     }
 
     const { status } = req.body;
-    const mission = missions[missionIndex];
+    const updateData = { status };
 
-    // Mettre à jour le statut et les timestamps appropriés
-    mission.status = status;
-
-    if (status === 'en_cours' && !mission.started_at) {
-      mission.started_at = new Date();
-    } else if (status === 'terminee' && !mission.completed_at) {
-      mission.completed_at = new Date();
+    // Mettre à jour les timestamps appropriés
+    if (status === 'en_cours' && !mission.startedAt) {
+      updateData.startedAt = new Date();
+    } else if (status === 'terminee' && !mission.completedAt) {
+      updateData.completedAt = new Date();
       
       // Calculer la durée réelle
-      if (mission.started_at) {
-        const duration = (new Date() - new Date(mission.started_at)) / (1000 * 60); // en minutes
-        mission.actual_duration = Math.round(duration);
+      if (mission.startedAt) {
+        const duration = (new Date() - new Date(mission.startedAt)) / (1000 * 60); // en minutes
+        updateData.actualDuration = Math.round(duration);
       }
 
       // Libérer l'ambulance
-      if (mission.ambulance_id) {
-        const ambulanceIndex = ambulances.findIndex(a => a.id === mission.ambulance_id);
-        if (ambulanceIndex !== -1) {
-          ambulances[ambulanceIndex].status = 'disponible';
-          ambulances[ambulanceIndex].updated_at = new Date();
-        }
+      if (mission.ambulance) {
+        await mission.ambulance.update({ status: 'disponible' });
       }
     }
 
-    res.json(mission);
+    await mission.update(updateData);
+
+    // Récupérer la mission mise à jour avec les relations
+    const updatedMission = await Mission.findByPk(mission.id, {
+      include: [
+        { model: Hospital, as: 'hospital' },
+        { model: Ambulance, as: 'ambulance' }
+      ]
+    });
+
+    res.json(updatedMission);
   } catch (error) {
     console.error('Erreur mise à jour statut mission:', error);
     res.status(500).json({ message: 'Erreur interne du serveur' });
@@ -228,25 +305,27 @@ router.put('/:id/status', [
 });
 
 // Supprimer une mission
-router.delete('/:id', authenticateToken, requireRole(['admin', 'regulateur']), (req, res) => {
-  const missionIndex = missions.findIndex(m => m.id === req.params.id);
-  if (missionIndex === -1) {
-    return res.status(404).json({ message: 'Mission non trouvée' });
-  }
+router.delete('/:id', authenticateToken, requireRole(['admin', 'regulateur']), async (req, res) => {
+  try {
+    const mission = await Mission.findByPk(req.params.id, {
+      include: [{ model: Ambulance, as: 'ambulance' }]
+    });
 
-  const mission = missions[missionIndex];
-
-  // Libérer l'ambulance si elle était assignée
-  if (mission.ambulance_id) {
-    const ambulanceIndex = ambulances.findIndex(a => a.id === mission.ambulance_id);
-    if (ambulanceIndex !== -1) {
-      ambulances[ambulanceIndex].status = 'disponible';
-      ambulances[ambulanceIndex].updated_at = new Date();
+    if (!mission) {
+      return res.status(404).json({ message: 'Mission non trouvée' });
     }
-  }
 
-  missions.splice(missionIndex, 1);
-  res.json({ message: 'Mission supprimée avec succès' });
+    // Libérer l'ambulance si elle était assignée
+    if (mission.ambulance) {
+      await mission.ambulance.update({ status: 'disponible' });
+    }
+
+    await mission.destroy();
+    res.json({ message: 'Mission supprimée avec succès' });
+  } catch (error) {
+    console.error('Erreur suppression mission:', error);
+    res.status(500).json({ message: 'Erreur interne du serveur' });
+  }
 });
 
 module.exports = router;

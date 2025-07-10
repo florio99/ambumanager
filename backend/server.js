@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
+const { sequelize } = require('./models');
 require('dotenv').config();
 
 const authRoutes = require('./routes/auth');
@@ -53,15 +54,30 @@ app.use('/api/v1/hospitals', hospitalRoutes);
 // Route de base
 app.get('/', (req, res) => {
   res.json({
-    message: 'Ambulance Management System API',
+    message: 'Ambulance Management System API with MySQL',
     version: '1.0.0',
-    status: 'running'
+    status: 'running',
+    database: 'MySQL with Sequelize ORM'
   });
 });
 
 // Route de santé
-app.get('/health', (req, res) => {
-  res.json({ status: 'healthy', timestamp: new Date().toISOString() });
+app.get('/health', async (req, res) => {
+  try {
+    await sequelize.authenticate();
+    res.json({ 
+      status: 'healthy', 
+      timestamp: new Date().toISOString(),
+      database: 'connected'
+    });
+  } catch (error) {
+    res.status(503).json({ 
+      status: 'unhealthy', 
+      timestamp: new Date().toISOString(),
+      database: 'disconnected',
+      error: error.message
+    });
+  }
 });
 
 // Middleware de gestion d'erreurs
@@ -81,10 +97,26 @@ app.use('*', (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Serveur démarré sur le port ${PORT}`);
-  console.log(`📍 API disponible sur http://localhost:${PORT}`);
-  console.log(`🏥 Documentation: http://localhost:${PORT}/api/v1`);
-});
+// Démarrage du serveur
+const startServer = async () => {
+  try {
+    // Vérifier la connexion à la base de données
+    await sequelize.authenticate();
+    console.log('✅ Connexion à MySQL établie');
+
+    // Démarrer le serveur
+    app.listen(PORT, () => {
+      console.log(`🚀 Serveur démarré sur le port ${PORT}`);
+      console.log(`📍 API disponible sur http://localhost:${PORT}`);
+      console.log(`🏥 Documentation: http://localhost:${PORT}/api/v1`);
+      console.log(`💾 Base de données: MySQL avec Sequelize ORM`);
+    });
+  } catch (error) {
+    console.error('❌ Impossible de se connecter à la base de données:', error);
+    process.exit(1);
+  }
+};
+
+startServer();
 
 module.exports = app;

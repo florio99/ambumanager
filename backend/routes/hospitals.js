@@ -1,18 +1,28 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const { hospitals } = require('../data/mockData');
+const { Hospital } = require('../models');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
 // Obtenir tous les hôpitaux
-router.get('/', authenticateToken, (req, res) => {
-  const { skip = 0, limit = 100 } = req.query;
-  const startIndex = parseInt(skip);
-  const endIndex = startIndex + parseInt(limit);
-  
-  const hospitalList = hospitals.slice(startIndex, endIndex);
-  res.json(hospitalList);
+router.get('/', authenticateToken, async (req, res) => {
+  try {
+    const { skip = 0, limit = 100 } = req.query;
+    const offset = parseInt(skip);
+    const limitNum = parseInt(limit);
+    
+    const hospitals = await Hospital.findAll({
+      offset,
+      limit: limitNum,
+      order: [['createdAt', 'DESC']]
+    });
+
+    res.json(hospitals);
+  } catch (error) {
+    console.error('Erreur récupération hôpitaux:', error);
+    res.status(500).json({ message: 'Erreur interne du serveur' });
+  }
 });
 
 // Créer un nouvel hôpital
@@ -24,7 +34,7 @@ router.post('/', [
   body('phone').notEmpty().withMessage('Le téléphone est requis'),
   body('latitude').isFloat().withMessage('Latitude invalide'),
   body('longitude').isFloat().withMessage('Longitude invalide')
-], (req, res) => {
+], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -46,24 +56,20 @@ router.post('/', [
     } = req.body;
 
     // Créer le nouvel hôpital
-    const newHospital = {
-      id: (hospitals.length + 1).toString(),
+    const newHospital = await Hospital.create({
       name,
       address,
       phone,
-      email: email || null,
+      email,
       latitude,
       longitude,
-      emergency_beds,
-      icu_beds,
-      general_beds,
+      emergencyBeds: emergency_beds,
+      icuBeds: icu_beds,
+      generalBeds: general_beds,
       specialties,
-      is_active,
-      created_at: new Date(),
-      updated_at: new Date()
-    };
+      isActive: is_active
+    });
 
-    hospitals.push(newHospital);
     res.status(201).json(newHospital);
   } catch (error) {
     console.error('Erreur création hôpital:', error);
@@ -72,29 +78,32 @@ router.post('/', [
 });
 
 // Obtenir un hôpital par ID
-router.get('/:id', authenticateToken, (req, res) => {
-  const hospital = hospitals.find(h => h.id === req.params.id);
-  if (!hospital) {
-    return res.status(404).json({ message: 'Hôpital non trouvé' });
+router.get('/:id', authenticateToken, async (req, res) => {
+  try {
+    const hospital = await Hospital.findByPk(req.params.id);
+    if (!hospital) {
+      return res.status(404).json({ message: 'Hôpital non trouvé' });
+    }
+    res.json(hospital);
+  } catch (error) {
+    console.error('Erreur récupération hôpital:', error);
+    res.status(500).json({ message: 'Erreur interne du serveur' });
   }
-  res.json(hospital);
 });
 
 // Mettre à jour un hôpital
 router.put('/:id', [
   authenticateToken,
   requireRole(['admin', 'regulateur'])
-], (req, res) => {
+], async (req, res) => {
   try {
-    const hospitalIndex = hospitals.findIndex(h => h.id === req.params.id);
-    if (hospitalIndex === -1) {
+    const hospital = await Hospital.findByPk(req.params.id);
+    if (!hospital) {
       return res.status(404).json({ message: 'Hôpital non trouvé' });
     }
 
-    const updateData = { ...req.body, updated_at: new Date() };
-    hospitals[hospitalIndex] = { ...hospitals[hospitalIndex], ...updateData };
-    
-    res.json(hospitals[hospitalIndex]);
+    await hospital.update(req.body);
+    res.json(hospital);
   } catch (error) {
     console.error('Erreur mise à jour hôpital:', error);
     res.status(500).json({ message: 'Erreur interne du serveur' });
@@ -102,14 +111,19 @@ router.put('/:id', [
 });
 
 // Supprimer un hôpital
-router.delete('/:id', authenticateToken, requireRole(['admin', 'regulateur']), (req, res) => {
-  const hospitalIndex = hospitals.findIndex(h => h.id === req.params.id);
-  if (hospitalIndex === -1) {
-    return res.status(404).json({ message: 'Hôpital non trouvé' });
-  }
+router.delete('/:id', authenticateToken, requireRole(['admin', 'regulateur']), async (req, res) => {
+  try {
+    const hospital = await Hospital.findByPk(req.params.id);
+    if (!hospital) {
+      return res.status(404).json({ message: 'Hôpital non trouvé' });
+    }
 
-  hospitals.splice(hospitalIndex, 1);
-  res.json({ message: 'Hôpital supprimé avec succès' });
+    await hospital.destroy();
+    res.json({ message: 'Hôpital supprimé avec succès' });
+  } catch (error) {
+    console.error('Erreur suppression hôpital:', error);
+    res.status(500).json({ message: 'Erreur interne du serveur' });
+  }
 });
 
 module.exports = router;

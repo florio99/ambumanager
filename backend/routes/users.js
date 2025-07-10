@@ -1,54 +1,47 @@
 const express = require('express');
-const bcrypt = require('bcryptjs');
 const { body, validationResult } = require('express-validator');
-const { users } = require('../data/mockData');
+const { User } = require('../models');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
 // Obtenir tous les utilisateurs (admin seulement)
-router.get('/', authenticateToken, requireRole(['admin']), (req, res) => {
-  const { skip = 0, limit = 100 } = req.query;
-  const startIndex = parseInt(skip);
-  const endIndex = startIndex + parseInt(limit);
-  
-  const userList = users
-    .slice(startIndex, endIndex)
-    .map(user => ({
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      phone: user.phone,
-      role: user.role,
-      isActive: user.isActive,
-      createdAt: user.createdAt,
-      lastLogin: user.lastLogin
-    }));
+router.get('/', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const { skip = 0, limit = 100 } = req.query;
+    const offset = parseInt(skip);
+    const limitNum = parseInt(limit);
+    
+    const users = await User.findAll({
+      offset,
+      limit: limitNum,
+      attributes: { exclude: ['password'] },
+      order: [['createdAt', 'DESC']]
+    });
 
-  res.json(userList);
+    res.json(users);
+  } catch (error) {
+    console.error('Erreur récupération utilisateurs:', error);
+    res.status(500).json({ message: 'Erreur interne du serveur' });
+  }
 });
 
 // Obtenir l'utilisateur actuel
-router.get('/me', authenticateToken, (req, res) => {
-  const user = users.find(u => u.id === req.user.id);
-  if (!user) {
-    return res.status(404).json({ message: 'Utilisateur non trouvé' });
-  }
+router.get('/me', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.user.id, {
+      attributes: { exclude: ['password'] }
+    });
+    
+    if (!user) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé' });
+    }
 
-  res.json({
-    id: user.id,
-    username: user.username,
-    email: user.email,
-    firstName: user.firstName,
-    lastName: user.lastName,
-    phone: user.phone,
-    role: user.role,
-    isActive: user.isActive,
-    createdAt: user.createdAt,
-    lastLogin: user.lastLogin
-  });
+    res.json(user);
+  } catch (error) {
+    console.error('Erreur récupération utilisateur actuel:', error);
+    res.status(500).json({ message: 'Erreur interne du serveur' });
+  }
 });
 
 // Créer un nouvel utilisateur (admin seulement)
@@ -71,35 +64,35 @@ router.post('/', [
     const { username, email, password, firstName, lastName, phone, role, isActive = true } = req.body;
 
     // Vérifier si l'utilisateur existe déjà
-    const existingUser = users.find(u => u.username === username || u.email === email);
+    const existingUser = await User.findOne({
+      where: {
+        $or: [{ username }, { email }]
+      }
+    });
+
     if (existingUser) {
       return res.status(400).json({ 
         message: existingUser.username === username ? 'Nom d\'utilisateur déjà utilisé' : 'Email déjà utilisé'
       });
     }
 
-    // Hasher le mot de passe
-    const hashedPassword = await bcrypt.hash(password, 10);
-
     // Créer le nouvel utilisateur
-    const newUser = {
-      id: (users.length + 1).toString(),
+    const newUser = await User.create({
       username,
       email,
-      password: hashedPassword,
+      password,
       firstName,
       lastName,
-      phone: phone || null,
+      phone,
       role,
-      isActive,
-      createdAt: new Date(),
-      lastLogin: null
-    };
-
-    users.push(newUser);
+      isActive
+    });
 
     // Retourner l'utilisateur sans le mot de passe
-    const { password: _, ...userResponse } = newUser;
+    const userResponse = await User.findByPk(newUser.id, {
+      attributes: { exclude: ['password'] }
+    });
+
     res.status(201).json(userResponse);
   } catch (error) {
     console.error('Erreur création utilisateur:', error);
@@ -108,14 +101,21 @@ router.post('/', [
 });
 
 // Obtenir un utilisateur par ID (admin seulement)
-router.get('/:id', authenticateToken, requireRole(['admin']), (req, res) => {
-  const user = users.find(u => u.id === req.params.id);
-  if (!user) {
-    return res.status(404).json({ message: 'Utilisateur non trouvé' });
-  }
+router.get('/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const user = await User.findByPk(req.params.id, {
+      attributes: { exclude: ['password'] }
+    });
 
-  const { password, ...userResponse } = user;
-  res.json(userResponse);
+    if (!user) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé' });
+    }
+
+    res.json(user);
+  } catch (error) {
+    console.error('Erreur récupération utilisateur:', error);
+    res.status(500).json({ message: 'Erreur interne du serveur' });
+  }
 });
 
 // Mettre à jour un utilisateur (admin seulement)
@@ -131,23 +131,20 @@ router.put('/:id', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const userIndex = users.findIndex(u => u.id === req.params.id);
-    if (userIndex === -1) {
+    const user = await User.findByPk(req.params.id);
+    if (!user) {
       return res.status(404).json({ message: 'Utilisateur non trouvé' });
     }
 
-    const { password, ...updateData } = req.body;
-    
-    // Si un nouveau mot de passe est fourni, le hasher
-    if (password) {
-      updateData.password = await bcrypt.hash(password, 10);
-    }
-
     // Mettre à jour l'utilisateur
-    users[userIndex] = { ...users[userIndex], ...updateData, updatedAt: new Date() };
+    await user.update(req.body);
 
-    const { password: _, ...userResponse } = users[userIndex];
-    res.json(userResponse);
+    // Retourner l'utilisateur mis à jour sans le mot de passe
+    const updatedUser = await User.findByPk(user.id, {
+      attributes: { exclude: ['password'] }
+    });
+
+    res.json(updatedUser);
   } catch (error) {
     console.error('Erreur mise à jour utilisateur:', error);
     res.status(500).json({ message: 'Erreur interne du serveur' });
@@ -155,14 +152,19 @@ router.put('/:id', [
 });
 
 // Supprimer un utilisateur (admin seulement)
-router.delete('/:id', authenticateToken, requireRole(['admin']), (req, res) => {
-  const userIndex = users.findIndex(u => u.id === req.params.id);
-  if (userIndex === -1) {
-    return res.status(404).json({ message: 'Utilisateur non trouvé' });
-  }
+router.delete('/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const user = await User.findByPk(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé' });
+    }
 
-  users.splice(userIndex, 1);
-  res.json({ message: 'Utilisateur supprimé avec succès' });
+    await user.destroy();
+    res.json({ message: 'Utilisateur supprimé avec succès' });
+  } catch (error) {
+    console.error('Erreur suppression utilisateur:', error);
+    res.status(500).json({ message: 'Erreur interne du serveur' });
+  }
 });
 
 module.exports = router;

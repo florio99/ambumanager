@@ -1,8 +1,7 @@
 const express = require('express');
-const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
-const { users } = require('../data/mockData');
+const { User } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
@@ -21,13 +20,13 @@ router.post('/login', [
     const { username, password } = req.body;
 
     // Trouver l'utilisateur
-    const user = users.find(u => u.username === username);
+    const user = await User.findOne({ where: { username } });
     if (!user) {
       return res.status(401).json({ message: 'Identifiants incorrects' });
     }
 
     // Vérifier le mot de passe
-    const isValidPassword = await bcrypt.compare(password, user.password);
+    const isValidPassword = await user.validatePassword(password);
     if (!isValidPassword) {
       return res.status(401).json({ message: 'Identifiants incorrects' });
     }
@@ -38,7 +37,7 @@ router.post('/login', [
     }
 
     // Mettre à jour la dernière connexion
-    user.lastLogin = new Date();
+    await user.update({ lastLogin: new Date() });
 
     // Créer le token JWT
     const token = jwt.sign(
@@ -75,22 +74,27 @@ router.post('/logout', authenticateToken, (req, res) => {
 });
 
 // Vérifier le token
-router.get('/verify', authenticateToken, (req, res) => {
-  const user = users.find(u => u.id === req.user.id);
-  if (!user) {
-    return res.status(404).json({ message: 'Utilisateur non trouvé' });
-  }
-
-  res.json({
-    user: {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      role: user.role
+router.get('/verify', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé' });
     }
-  });
+
+    res.json({
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error('Erreur vérification token:', error);
+    res.status(500).json({ message: 'Erreur interne du serveur' });
+  }
 });
 
 module.exports = router;

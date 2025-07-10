@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
-const { users } = require('../data/mockData');
+const { User } = require('../models');
 
-const authenticateToken = (req, res, next) => {
+const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -9,13 +9,20 @@ const authenticateToken = (req, res, next) => {
     return res.status(401).json({ message: 'Token d\'accès requis' });
   }
 
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({ message: 'Token invalide' });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    // Vérifier que l'utilisateur existe toujours
+    const user = await User.findByPk(decoded.id);
+    if (!user || !user.isActive) {
+      return res.status(401).json({ message: 'Utilisateur non trouvé ou inactif' });
     }
-    req.user = user;
+
+    req.user = decoded;
     next();
-  });
+  } catch (err) {
+    return res.status(403).json({ message: 'Token invalide' });
+  }
 };
 
 const requireRole = (roles) => {
