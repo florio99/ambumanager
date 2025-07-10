@@ -1,8 +1,8 @@
-# Backend API - Système de Gestion d'Ambulances
+# Backend API - Système de Gestion d'Ambulances (Node.js Express)
 
 ## Description
 
-API REST développée avec FastAPI pour le système de gestion d'ambulances. Cette API fournit tous les endpoints nécessaires pour gérer les utilisateurs, ambulances, missions, hôpitaux, personnel et maintenance.
+API REST développée avec Node.js et Express pour le système de gestion d'ambulances. Cette API fournit tous les endpoints nécessaires pour gérer les utilisateurs, ambulances, missions et hôpitaux.
 
 ## Fonctionnalités
 
@@ -11,32 +11,21 @@ API REST développée avec FastAPI pour le système de gestion d'ambulances. Cet
 - **Gestion des ambulances** : Suivi en temps réel, statuts, localisation
 - **Gestion des missions** : Création, assignation, suivi des missions d'urgence
 - **Gestion des hôpitaux** : Base de données des établissements de santé
-- **Gestion du personnel** : Équipes, qualifications, plannings
-- **Maintenance** : Suivi des interventions et coûts
+- **Middleware de sécurité** : Helmet, CORS, Rate limiting
+- **Validation des données** : Express-validator
 
 ## Installation
 
 ### Prérequis
 
-- Python 3.8+
-- MySQL 8.0+
-- pip
-
-### Configuration de la base de données
-
-1. Créer une base de données MySQL :
-```sql
-CREATE DATABASE ambulance_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'ambulance_user'@'localhost' IDENTIFIED BY 'your_password';
-GRANT ALL PRIVILEGES ON ambulance_db.* TO 'ambulance_user'@'localhost';
-FLUSH PRIVILEGES;
-```
+- Node.js 16+
+- npm ou yarn
 
 ### Installation des dépendances
 
 ```bash
 cd backend
-pip install -r requirements.txt
+npm install
 ```
 
 ### Configuration
@@ -48,149 +37,157 @@ cp .env.example .env
 
 2. Modifier le fichier `.env` avec vos paramètres :
 ```env
-DATABASE_URL=mysql+pymysql://ambulance_user:your_password@localhost:3306/ambulance_db
-SECRET_KEY=your-secret-key-change-in-production
-```
-
-### Initialisation de la base de données
-
-```bash
-# Créer les tables
-python scripts/init_db.py
-
-# Ou utiliser Alembic pour les migrations
-alembic upgrade head
+PORT=8000
+JWT_SECRET=your-super-secret-jwt-key-change-in-production
+JWT_EXPIRES_IN=24h
+ALLOWED_ORIGINS=http://localhost:5173,https://localhost:5173,http://localhost:3000
+NODE_ENV=development
 ```
 
 ### Démarrage du serveur
 
 ```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+# Mode développement avec rechargement automatique
+npm run dev
+
+# Mode production
+npm start
 ```
 
 L'API sera accessible sur : http://localhost:8000
-
-## Documentation
-
-- **Swagger UI** : http://localhost:8000/docs
-- **ReDoc** : http://localhost:8000/redoc
 
 ## Endpoints principaux
 
 ### Authentification
 - `POST /api/v1/auth/login` : Connexion utilisateur
+- `POST /api/v1/auth/logout` : Déconnexion utilisateur
+- `GET /api/v1/auth/verify` : Vérifier le token
 
 ### Utilisateurs
-- `GET /api/v1/users/` : Liste des utilisateurs
-- `POST /api/v1/users/` : Créer un utilisateur
+- `GET /api/v1/users/` : Liste des utilisateurs (admin)
+- `POST /api/v1/users/` : Créer un utilisateur (admin)
 - `GET /api/v1/users/me` : Profil utilisateur actuel
-- `GET /api/v1/users/{user_id}` : Détails d'un utilisateur
-- `PUT /api/v1/users/{user_id}` : Modifier un utilisateur
-- `DELETE /api/v1/users/{user_id}` : Supprimer un utilisateur
+- `GET /api/v1/users/:id` : Détails d'un utilisateur (admin)
+- `PUT /api/v1/users/:id` : Modifier un utilisateur (admin)
+- `DELETE /api/v1/users/:id` : Supprimer un utilisateur (admin)
 
 ### Ambulances
 - `GET /api/v1/ambulances/` : Liste des ambulances
 - `GET /api/v1/ambulances/available` : Ambulances disponibles
-- `POST /api/v1/ambulances/` : Créer une ambulance
-- `GET /api/v1/ambulances/{ambulance_id}` : Détails d'une ambulance
-- `PUT /api/v1/ambulances/{ambulance_id}` : Modifier une ambulance
-- `PUT /api/v1/ambulances/{ambulance_id}/location` : Mettre à jour la localisation
-- `PUT /api/v1/ambulances/{ambulance_id}/status` : Changer le statut
-- `DELETE /api/v1/ambulances/{ambulance_id}` : Supprimer une ambulance
+- `POST /api/v1/ambulances/` : Créer une ambulance (admin/régulateur)
+- `GET /api/v1/ambulances/:id` : Détails d'une ambulance
+- `PUT /api/v1/ambulances/:id` : Modifier une ambulance (admin/régulateur)
+- `PUT /api/v1/ambulances/:id/location` : Mettre à jour la localisation
+- `PUT /api/v1/ambulances/:id/status` : Changer le statut (admin/régulateur)
+- `DELETE /api/v1/ambulances/:id` : Supprimer une ambulance (admin/régulateur)
 
 ### Missions
 - `GET /api/v1/missions/` : Liste des missions
 - `GET /api/v1/missions/active` : Missions actives
-- `GET /api/v1/missions/status/{status}` : Missions par statut
-- `POST /api/v1/missions/` : Créer une mission
-- `GET /api/v1/missions/{mission_id}` : Détails d'une mission
-- `PUT /api/v1/missions/{mission_id}` : Modifier une mission
-- `POST /api/v1/missions/{mission_id}/assign` : Assigner une mission
-- `PUT /api/v1/missions/{mission_id}/status` : Changer le statut
-- `DELETE /api/v1/missions/{mission_id}` : Supprimer une mission
+- `GET /api/v1/missions/status/:status` : Missions par statut
+- `POST /api/v1/missions/` : Créer une mission (admin/régulateur)
+- `GET /api/v1/missions/:id` : Détails d'une mission
+- `PUT /api/v1/missions/:id` : Modifier une mission (admin/régulateur)
+- `POST /api/v1/missions/:id/assign` : Assigner une mission (admin/régulateur)
+- `PUT /api/v1/missions/:id/status` : Changer le statut
+- `DELETE /api/v1/missions/:id` : Supprimer une mission (admin/régulateur)
 
-## Modèles de données
+### Hôpitaux
+- `GET /api/v1/hospitals/` : Liste des hôpitaux
+- `POST /api/v1/hospitals/` : Créer un hôpital (admin/régulateur)
+- `GET /api/v1/hospitals/:id` : Détails d'un hôpital
+- `PUT /api/v1/hospitals/:id` : Modifier un hôpital (admin/régulateur)
+- `DELETE /api/v1/hospitals/:id` : Supprimer un hôpital (admin/régulateur)
 
-### User
-- Gestion des utilisateurs avec rôles
-- Authentification JWT
-- Profils personnalisés
+## Authentification
 
-### Ambulance
-- Informations véhicule
-- Localisation GPS en temps réel
-- Statuts et équipements
-- Suivi carburant et kilométrage
+L'API utilise JWT (JSON Web Tokens) pour l'authentification. Incluez le token dans l'en-tête Authorization :
 
-### Mission
-- Informations patient
-- Localisation prise en charge
-- Destination hôpital
-- Assignation équipe
-- Suivi temporel
+```
+Authorization: Bearer <votre-token>
+```
 
-### Hospital
-- Base de données établissements
-- Capacités d'accueil
-- Spécialités médicales
-- Coordonnées GPS
+## Comptes de démonstration
+
+- **Admin** : `admin` / `admin123`
+- **Régulateur** : `regulateur` / `demo123`
+- **Ambulancier** : `ambulancier` / `demo123`
+
+## Structure du projet
+
+```
+backend/
+├── server.js              # Point d'entrée de l'application
+├── middleware/
+│   └── auth.js            # Middleware d'authentification
+├── routes/
+│   ├── auth.js            # Routes d'authentification
+│   ├── users.js           # Routes utilisateurs
+│   ├── ambulances.js      # Routes ambulances
+│   ├── missions.js        # Routes missions
+│   └── hospitals.js       # Routes hôpitaux
+├── data/
+│   └── mockData.js        # Données de démonstration
+├── package.json
+├── .env                   # Variables d'environnement
+└── README.md
+```
 
 ## Sécurité
 
-- **JWT Authentication** : Tokens sécurisés
+- **JWT Authentication** : Tokens sécurisés avec expiration
 - **CORS** : Configuration des origines autorisées
-- **Validation** : Pydantic pour la validation des données
+- **Helmet** : Protection contre les vulnérabilités communes
+- **Rate Limiting** : Limitation du nombre de requêtes
+- **Validation** : Validation des données avec express-validator
 - **Hachage** : Mots de passe sécurisés avec bcrypt
 
 ## Développement
 
-### Structure du projet
-```
-backend/
-├── app/
-│   ├── api/           # Endpoints API
-│   ├── core/          # Configuration et sécurité
-│   ├── crud/          # Opérations base de données
-│   ├── database/      # Configuration DB
-│   ├── models/        # Modèles SQLAlchemy
-│   └── schemas/       # Schémas Pydantic
-├── alembic/           # Migrations DB
-├── scripts/           # Scripts utilitaires
-└── requirements.txt   # Dépendances
-```
+### Ajout de nouvelles routes
 
-### Tests
-```bash
-# Installer les dépendances de test
-pip install pytest pytest-asyncio httpx
+1. Créer un nouveau fichier dans `routes/`
+2. Définir les routes avec les middlewares appropriés
+3. Importer et utiliser dans `server.js`
 
-# Lancer les tests
-pytest
-```
+### Middleware d'authentification
 
-### Migrations
-```bash
-# Créer une migration
-alembic revision --autogenerate -m "Description"
+- `authenticateToken` : Vérifier la validité du JWT
+- `requireRole(['admin', 'regulateur'])` : Vérifier les permissions
 
-# Appliquer les migrations
-alembic upgrade head
+### Validation des données
+
+Utiliser `express-validator` pour valider les données d'entrée :
+
+```javascript
+body('email').isEmail().withMessage('Email invalide')
 ```
 
 ## Production
 
 ### Variables d'environnement importantes
-- `SECRET_KEY` : Clé secrète pour JWT (obligatoire)
-- `DATABASE_URL` : URL de connexion à la base de données
-- `DEBUG` : False en production
+
+- `JWT_SECRET` : Clé secrète pour JWT (obligatoire, complexe)
+- `NODE_ENV` : `production` pour la production
+- `PORT` : Port du serveur
 - `ALLOWED_ORIGINS` : Origines CORS autorisées
 
 ### Déploiement
+
 ```bash
-# Avec Gunicorn
-gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+# Installer les dépendances de production uniquement
+npm ci --only=production
+
+# Démarrer en mode production
+NODE_ENV=production npm start
 ```
+
+## Monitoring et Logs
+
+- Logs des requêtes avec Morgan
+- Gestion d'erreurs centralisée
+- Health check sur `/health`
 
 ## Support
 
-Pour toute question ou problème, consultez la documentation Swagger à l'adresse `/docs` une fois le serveur démarré.
+L'API est documentée et testable via les endpoints. Consultez les routes dans le dossier `routes/` pour plus de détails sur les paramètres et réponses.
