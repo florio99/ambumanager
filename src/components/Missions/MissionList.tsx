@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Search, Filter, MapPin, Clock, User, Phone, Guitar as Hospital, AlertTriangle, CheckCircle, XCircle, Edit, Trash2 } from 'lucide-react';
 import { useMissionStore } from '../../store/missionStore';
 import { useAuthStore } from '../../store/authStore';
